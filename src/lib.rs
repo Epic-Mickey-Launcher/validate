@@ -105,12 +105,12 @@ pub fn validate(path: &PathBuf) -> Result<ModInfo, Box<dyn std::error::Error>> {
 
 #[derive(Serialize, Deserialize)]
 pub struct ModInfo {
-    name: String,
-    game: String,
-    platform: String,
-    description: String,
-    dependencies: Vec<String>,
-    custom_textures_path: String,
-    custom_game_files_path: String,
-    icon_path: String,
+    pub name: String,
+    pub game: String,
+    pub platform: String,
+    pub description: String,
+    pub dependencies: Vec<String>,
+    pub custom_textures_path: String,
+    pub custom_game_files_path: String,
+    pub icon_path: String,
 }
