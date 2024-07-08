@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::{fs::File, io::Read, path::PathBuf};
+use std::{ffi::OsStr, fs::File, io::Read, path::PathBuf};
 
 const ALLOWED_GAMES: [&str; 2] = ["EM1", "EM2"];
 const ALLOWED_PLATFORMS: [&str; 2] = ["wii", "pc"];
@@ -83,20 +83,20 @@ pub fn validate(path: &PathBuf) -> Result<ModInfo, Box<dyn std::error::Error>> {
 
     for entry in walkdir::WalkDir::new(path).into_iter() {
         let res = entry?;
-        if !res.path().is_file() {
+        if res.path().is_dir() {
             continue;
         }
 
-        let formatted_extension = res
-            .path()
-            .extension()
-            .unwrap()
-            .to_ascii_lowercase()
-            .to_str()
-            .unwrap()
-            .to_string();
-        if BANNED_EXTENSIONS.contains(&formatted_extension.as_str()) {
-            return Err(format!("mod contains illegal file ({})", formatted_extension).into());
+        let extension = match res.path().extension() {
+            Some(s) => s,
+            None => OsStr::new(""),
+        };
+
+        if !extension.is_empty() {
+            let formatted_extension = extension.to_str().unwrap().to_string().to_lowercase();
+            if BANNED_EXTENSIONS.contains(&formatted_extension.as_str()) {
+                return Err(format!("mod contains illegal file ({})", formatted_extension).into());
+            }
         }
     }
 
