@@ -37,7 +37,7 @@ pub fn validate(path: &PathBuf) -> Result<ModInfo, Box<dyn std::error::Error>> {
         serde_json::from_str(&mod_info_buffer)?;
 
     let name = mod_info.get("name").unwrap().as_str().unwrap();
-
+    println!("{}", name);
     if name.trim().is_empty() {
         return Err("mod name is empty.".into());
     }
@@ -72,25 +72,27 @@ pub fn validate(path: &PathBuf) -> Result<ModInfo, Box<dyn std::error::Error>> {
         }
     }
 
-    let game = &mod_info.get("game").unwrap().to_string();
-    let platform = &mod_info.get("platform").unwrap().to_string();
+    let game = &mod_info.get("game").unwrap().as_str().unwrap();
+    let platform = &mod_info.get("platform").unwrap().as_str().unwrap();
 
     final_mod_info.game = game.to_string();
     final_mod_info.platform = platform.to_string();
 
-    if !ALLOWED_GAMES.contains(&game.as_str()) {
+    println!("{}", game);
+
+    if !ALLOWED_GAMES.contains(&game) {
         return Err("could not recognize defined game.".into());
     }
 
-    if !ALLOWED_PLATFORMS.contains(&platform.as_str()) {
+    if !ALLOWED_PLATFORMS.contains(&platform) {
         return Err("could not recognize defined platform.".into());
     }
 
-    if game == "EMR" && platform == "wii" {
+    if game.to_string() == "EMR" && platform.to_string() == "wii" {
         return Err("impossible combination (emr/wii)".into());
     }
 
-    if game == "EM1" && platform == "pc" {
+    if game.to_string() == "EM1" && platform.to_string() == "pc" {
         return Err("impossible combination (em1/pc)".into());
     }
 
@@ -98,7 +100,7 @@ pub fn validate(path: &PathBuf) -> Result<ModInfo, Box<dyn std::error::Error>> {
     let mut no_custom_files = false;
 
     let custom_textures_path = match mod_info.get("custom_textures_path") {
-        Some(x) => x.to_string(),
+        Some(x) => x.as_str().unwrap().to_string(),
         None => {
             no_custom_textures = true;
             "".to_string()
@@ -106,7 +108,7 @@ pub fn validate(path: &PathBuf) -> Result<ModInfo, Box<dyn std::error::Error>> {
     };
 
     let custom_game_files_path = match mod_info.get("custom_game_files_path") {
-        Some(x) => x.to_string(),
+        Some(x) => x.as_str().unwrap().to_string(),
         None => {
             no_custom_files = true;
             "".to_string()
@@ -148,7 +150,7 @@ pub fn validate(path: &PathBuf) -> Result<ModInfo, Box<dyn std::error::Error>> {
             .push("texture mod".to_string())
     }
 
-    let icon_path = mod_info.get("icon_path").unwrap().to_string();
+    let icon_path = mod_info.get("icon_path").unwrap().as_str().unwrap();
 
     final_mod_info.icon_path = icon_path.trim().to_string();
 
@@ -168,7 +170,7 @@ pub fn validate(path: &PathBuf) -> Result<ModInfo, Box<dyn std::error::Error>> {
         Some(x) => {
             let array = x.as_array().unwrap();
             for element in array {
-                let dependency = element.to_string();
+                let dependency = element.as_str().unwrap().to_string();
                 for char in dependency.trim().chars() {
                     if !char.is_alphanumeric() {
                         return Err("only alphanumerics are allowed in dependency list.".into());
