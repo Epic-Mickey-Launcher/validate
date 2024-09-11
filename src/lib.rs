@@ -23,6 +23,7 @@ pub fn validate(path: &PathBuf) -> Result<ModInfo, Box<dyn std::error::Error>> {
         dependencies: Vec::new(),
         custom_textures_path: "".to_string(),
         custom_game_files_path: "".to_string(),
+        scripts_path: "".to_string(),
         icon_path: "".to_string(),
         auto_generated_tags: Vec::new(),
     };
@@ -113,6 +114,7 @@ pub fn validate(path: &PathBuf) -> Result<ModInfo, Box<dyn std::error::Error>> {
 
     let mut no_custom_textures = false;
     let mut no_custom_files = false;
+    let mut no_scripts = false;
 
     let custom_textures_path = match mod_info.get("custom_textures_path") {
         Some(x) => x.as_str().unwrap().to_string(),
@@ -130,6 +132,22 @@ pub fn validate(path: &PathBuf) -> Result<ModInfo, Box<dyn std::error::Error>> {
         }
     };
 
+    let scripts_path = match mod_info.get("scripts_path") {
+        Some(x) => x.as_str().unwrap().to_string(),
+        None => {
+            no_scripts = true;
+            "".to_string()
+        }
+    };
+
+    if platform == "PC" && !no_custom_textures {
+        return Err("custom textures not allowed on pc.".into());
+    }
+
+    if platform != "PC" || game != "EMR" {
+        return Err("custom scripts only available with EMR".into());
+    }
+    final_mod_info.scripts_path = scripts_path.clone();
     final_mod_info.custom_textures_path = custom_textures_path.clone();
     final_mod_info.custom_game_files_path = custom_game_files_path.clone();
 
@@ -140,7 +158,7 @@ pub fn validate(path: &PathBuf) -> Result<ModInfo, Box<dyn std::error::Error>> {
         if PathBuf::from(&custom_game_files_path).is_absolute() {
             return Err("you are not allowed to have absolute paths on custom file path.".into());
         }
-        if PathBuf::from(&custom_game_files_path).exists() {
+        if !PathBuf::from(&path).join(&custom_game_files_path).exists() {
             return Err("custom game files path does not exist.".into());
         }
 
@@ -154,9 +172,11 @@ pub fn validate(path: &PathBuf) -> Result<ModInfo, Box<dyn std::error::Error>> {
             return Err("custom textures path is empty.".into());
         }
         if PathBuf::from(&custom_textures_path).is_absolute() {
-            return Err("you are not allowed to have absolute paths on custom file path.".into());
+            return Err(
+                "you are not allowed to have absolute paths on custom textures path.".into(),
+            );
         }
-        if PathBuf::from(&custom_textures_path).exists() {
+        if !PathBuf::from(&path).join(&custom_textures_path).exists() {
             return Err("custom textures path does not exist.".into());
         }
 
@@ -165,6 +185,21 @@ pub fn validate(path: &PathBuf) -> Result<ModInfo, Box<dyn std::error::Error>> {
             .push("texture-mod".to_string())
     }
 
+    if !no_scripts {
+        if scripts_path.trim().is_empty() {
+            return Err("scripts path is empty.".into());
+        }
+        if PathBuf::from(&scripts_path).is_absolute() {
+            return Err("you are not allowed to have absolute paths on custom script path.".into());
+        }
+        if !PathBuf::from(&path).join(&scripts_path).exists() {
+            return Err("custom script path does not exist.".into());
+        }
+
+        final_mod_info
+            .auto_generated_tags
+            .push("script-mod".to_string())
+    }
     let icon_path = mod_info.get("icon_path").unwrap().as_str().unwrap();
 
     final_mod_info.icon_path = icon_path.trim().to_string();
@@ -277,7 +312,7 @@ pub fn generate_project(_game: String, _platform: String, path: String) -> std::
     }
 
     let stringified = serde_json::to_string(&mod_info)?;
-    meta_file.write_all(stringified.as_bytes());
+    meta_file.write_all(stringified.as_bytes())?;
     Ok(())
 }
 
