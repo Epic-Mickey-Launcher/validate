@@ -330,3 +330,21 @@ pub struct ModInfo {
     pub icon_path: String,
     pub auto_generated_tags: Vec<String>,
 }
+
+impl ModInfo {
+    pub fn new() -> ModInfo {
+        ModInfo {
+            name: "".to_string(),
+            game: "".to_string(),
+            platform: "".to_string(),
+            scripts_path: "".to_string(),
+            custom_game_files_path: "".to_string(),
+            custom_textures_path: "".to_string(),
+            description: "".to_string(),
+            shortdescription: "".to_string(),
+            dependencies: Vec::new(),
+            icon_path: "".to_string(),
+            auto_generated_tags: Vec::new(),
+        }
+    }
+}
