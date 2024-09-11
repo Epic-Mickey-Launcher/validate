@@ -1,5 +1,10 @@
 use serde::{Deserialize, Serialize};
-use std::{ffi::OsStr, fs::File, io::Read, path::PathBuf};
+use std::{
+    ffi::OsStr,
+    fs::File,
+    io::{Read, Write},
+    path::{Path, PathBuf},
+};
 
 const ALLOWED_GAMES: [&str; 3] = ["EM1", "EM2", "EMR"];
 const ALLOWED_PLATFORMS: [&str; 2] = ["wii", "pc"];
@@ -72,27 +77,37 @@ pub fn validate(path: &PathBuf) -> Result<ModInfo, Box<dyn std::error::Error>> {
         }
     }
 
-    let game = &mod_info.get("game").unwrap().as_str().unwrap();
-    let platform = &mod_info.get("platform").unwrap().as_str().unwrap();
+    let game = &mod_info
+        .get("game")
+        .unwrap()
+        .as_str()
+        .unwrap()
+        .to_uppercase();
+    let platform = &mod_info
+        .get("platform")
+        .unwrap()
+        .as_str()
+        .unwrap()
+        .to_uppercase();
 
     final_mod_info.game = game.to_string();
     final_mod_info.platform = platform.to_string();
 
     println!("{}", game);
 
-    if !ALLOWED_GAMES.contains(&game) {
+    if !ALLOWED_GAMES.contains(&game.to_uppercase().as_str()) {
         return Err("could not recognize defined game.".into());
     }
 
-    if !ALLOWED_PLATFORMS.contains(&platform) {
+    if !ALLOWED_PLATFORMS.contains(&platform.to_uppercase().as_str()) {
         return Err("could not recognize defined platform.".into());
     }
 
-    if game.to_string() == "EMR" && platform.to_string() == "wii" {
+    if game.to_string() == "EMR" && platform.to_string() == "WII" {
         return Err("impossible combination (emr/wii)".into());
     }
 
-    if game.to_string() == "EM1" && platform.to_string() == "pc" {
+    if game.to_string() == "EM1" && platform.to_string() == "PC" {
         return Err("impossible combination (em1/pc)".into());
     }
 
@@ -131,7 +146,7 @@ pub fn validate(path: &PathBuf) -> Result<ModInfo, Box<dyn std::error::Error>> {
 
         final_mod_info
             .auto_generated_tags
-            .push("gamefile mod".to_string())
+            .push("gamefile-mod".to_string())
     }
 
     if !no_custom_textures {
@@ -147,7 +162,7 @@ pub fn validate(path: &PathBuf) -> Result<ModInfo, Box<dyn std::error::Error>> {
 
         final_mod_info
             .auto_generated_tags
-            .push("texture mod".to_string())
+            .push("texture-mod".to_string())
     }
 
     let icon_path = mod_info.get("icon_path").unwrap().as_str().unwrap();
@@ -205,6 +220,67 @@ pub fn validate(path: &PathBuf) -> Result<ModInfo, Box<dyn std::error::Error>> {
     Ok(final_mod_info)
 }
 
+pub fn generate_project(_game: String, _platform: String, path: String) -> std::io::Result<()> {
+    let full_path = PathBuf::from(path);
+
+    let mut meta_file = File::create(Path::new(&full_path).join("mod.json"))?;
+
+    let game = _game.to_uppercase();
+    let platform = _platform.to_uppercase();
+
+    if game == "EM1" && platform == "PC" {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "impossible combination (EM1/PC)",
+        ));
+    }
+
+    if game == "EMR" && platform == "WII" {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "impossible combination (EMR/WII)",
+        ));
+    }
+
+    let mut mod_info = ModInfo {
+        name: "Auto Generated Mod".to_string(),
+        game: game.to_string(),
+        platform: platform.to_string(),
+        description: "".to_string(),
+        shortdescription: "Generated with eml-validate".to_string(),
+        dependencies: Vec::new(),
+        custom_textures_path: "textures".to_string(),
+        custom_game_files_path: "games".to_string(),
+        scripts_path: "".to_string(),
+        icon_path: "icon.png".to_string(),
+        auto_generated_tags: Vec::new(),
+    };
+
+    if platform == "PC" {
+        mod_info.custom_textures_path = "".to_string();
+    }
+
+    if game == "EMR" {
+        mod_info.scripts_path = "scripts".to_string();
+    }
+
+    if !mod_info.scripts_path.is_empty() {
+        std::fs::create_dir_all(Path::new(&full_path).join(mod_info.scripts_path.clone()))?;
+    }
+    if !mod_info.custom_game_files_path.is_empty() {
+        std::fs::create_dir_all(
+            Path::new(&full_path).join(mod_info.custom_game_files_path.clone()),
+        )?;
+    }
+    if !mod_info.custom_textures_path.is_empty() {
+        std::fs::create_dir_all(Path::new(&full_path).join(mod_info.custom_textures_path.clone()))?;
+    }
+
+    let stringified = serde_json::to_string(&mod_info)?;
+    meta_file.write_all(stringified.as_bytes());
+    Ok(())
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct ModInfo {
     pub name: String,
@@ -215,6 +291,7 @@ pub struct ModInfo {
     pub dependencies: Vec<String>,
     pub custom_textures_path: String,
     pub custom_game_files_path: String,
+    pub scripts_path: String,
     pub icon_path: String,
     pub auto_generated_tags: Vec<String>,
 }
