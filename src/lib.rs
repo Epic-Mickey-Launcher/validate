@@ -19,7 +19,7 @@ pub fn validate(path: &PathBuf) -> Result<ModInfo, Box<dyn std::error::Error>> {
         game: "".to_string(),
         platform: "".to_string(),
         description: "".to_string(),
-        shortdescription: "".to_string(),
+        short_description: "".to_string(),
         dependencies: Vec::new(),
         custom_textures_path: "".to_string(),
         custom_game_files_path: "".to_string(),
@@ -56,7 +56,7 @@ pub fn validate(path: &PathBuf) -> Result<ModInfo, Box<dyn std::error::Error>> {
     match short_description_value {
         Some(x) => {
             let short_description = x.as_str().unwrap().trim().to_string();
-            final_mod_info.shortdescription = short_description;
+            final_mod_info.short_description = short_description;
         }
         None => no_short_description = true,
     }
@@ -74,7 +74,7 @@ pub fn validate(path: &PathBuf) -> Result<ModInfo, Box<dyn std::error::Error>> {
         final_mod_info.description = mod_description.trim().to_string();
 
         if no_short_description {
-            final_mod_info.shortdescription = "clone".to_string();
+            final_mod_info.short_description = "clone".to_string();
         }
     }
 
@@ -283,7 +283,7 @@ pub fn generate_project(_game: String, _platform: String, path: String) -> std::
         game: game.to_string(),
         platform: platform.to_string(),
         description: "".to_string(),
-        shortdescription: "Generated with eml-validate".to_string(),
+        short_description: "Generated with eml-validate".to_string(),
         dependencies: Vec::new(),
         custom_textures_path: "textures".to_string(),
         custom_game_files_path: "files".to_string(),
@@ -324,7 +324,7 @@ pub struct ModInfo {
     pub game: String,
     pub platform: String,
     pub description: String,
-    pub shortdescription: String,
+    pub short_description: String,
     pub dependencies: Vec<String>,
     pub custom_textures_path: String,
     pub custom_game_files_path: String,
@@ -343,7 +343,7 @@ impl ModInfo {
             custom_game_files_path: "".to_string(),
             custom_textures_path: "".to_string(),
             description: "".to_string(),
-            shortdescription: "".to_string(),
+            short_description: "".to_string(),
             dependencies: Vec::new(),
             icon_path: "".to_string(),
             auto_generated_tags: Vec::new(),
