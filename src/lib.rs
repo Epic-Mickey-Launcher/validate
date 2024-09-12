@@ -256,6 +256,7 @@ pub fn validate(path: &PathBuf) -> Result<ModInfo, Box<dyn std::error::Error>> {
 }
 
 pub fn generate_project(_game: String, _platform: String, path: String) -> std::io::Result<()> {
+    println!("Generating Mod");
     let full_path = PathBuf::from(path);
 
     let mut meta_file = File::create(Path::new(&full_path).join("mod.json"))?;
@@ -285,7 +286,7 @@ pub fn generate_project(_game: String, _platform: String, path: String) -> std::
         shortdescription: "Generated with eml-validate".to_string(),
         dependencies: Vec::new(),
         custom_textures_path: "textures".to_string(),
-        custom_game_files_path: "games".to_string(),
+        custom_game_files_path: "files".to_string(),
         scripts_path: "".to_string(),
         icon_path: "icon.png".to_string(),
         auto_generated_tags: Vec::new(),
@@ -313,6 +314,7 @@ pub fn generate_project(_game: String, _platform: String, path: String) -> std::
 
     let stringified = serde_json::to_string(&mod_info)?;
     meta_file.write_all(stringified.as_bytes())?;
+    println!("Finished generating mod");
     Ok(())
 }
 
