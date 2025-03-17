@@ -87,18 +87,31 @@ pub fn validate(path: &PathBuf, strict: bool) -> Result<ModInfo, Error> {
         }
     }
 
-    let game = &mod_info
-        .get("game")
-        .unwrap()
-        .as_str()
-        .unwrap()
-        .to_uppercase();
-    let platform = &mod_info
-        .get("platform")
-        .unwrap()
-        .as_str()
-        .unwrap()
-        .to_uppercase();
+    let mut game = match mod_info.get("game") {
+        Some(x) => x.as_str().unwrap().to_string().to_uppercase(),
+        None => {
+            "".to_string()
+        }
+    };
+    let mut platform = match mod_info.get("platform") {
+        Some(x) => x.as_str().unwrap().to_string().to_uppercase(),
+        None => {
+            "".to_string()
+        }
+    };
+
+    if platform.trim().is_empty() {
+        if strict {
+            return Err(anyhow!("mod platform is empty."));
+        }
+        else {
+            platform = "WII".to_string();
+        }
+    }
+
+    if game.trim().is_empty() {
+        return Err(anyhow!("mod game type is empty."));
+    }
 
     println!("{}", platform);
 
