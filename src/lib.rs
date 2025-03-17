@@ -1,4 +1,6 @@
 use serde::{Deserialize, Serialize};
+use anyhow::{anyhow, Result};
+use anyhow::Error;
 use std::{
     ffi::OsStr,
     fs::File,
@@ -7,13 +9,19 @@ use std::{
 };
 
 const ALLOWED_GAMES: [&str; 3] = ["EM1", "EM2", "EMR"];
-const ALLOWED_PLATFORMS: [&str; 2] = ["wii", "pc"];
+const ALLOWED_PLATFORMS: [&str; 2] = ["WII", "PC"];
 const BANNED_EXTENSIONS: [&str; 6] = ["dll", "so", "exe", "sh", "bat", "scr"]; // not technically
                                                                                // banned, but will
                                                                                // require analysis
                                                                                // by a moderator
-
-pub fn validate(path: &PathBuf) -> Result<ModInfo, Box<dyn std::error::Error>> {
+const BANNED_PAK_FILES: [&str; 5] = [
+    "global.utoc",
+    "global.ucas",
+    "recolored-WindowsNoEditor.pak",
+    "recolored-WindowsNoEditor.ucas",
+    "recolored-WindowsNoEditor.utoc",
+];
+pub fn validate(path: &PathBuf, strict: bool) -> Result<ModInfo, Error> {
     let mut final_mod_info: ModInfo = ModInfo {
         name: "".to_string(),
         game: "".to_string(),
@@ -27,6 +35,7 @@ pub fn validate(path: &PathBuf) -> Result<ModInfo, Box<dyn std::error::Error>> {
         icon_path: "".to_string(),
         auto_generated_tags: Vec::new(),
     };
+    println!("{}", &path.display());
     let mut mod_info_path = path.clone();
     mod_info_path.push("mod.json");
 
@@ -34,7 +43,7 @@ pub fn validate(path: &PathBuf) -> Result<ModInfo, Box<dyn std::error::Error>> {
     mod_description_path.push("description.md");
 
     if !mod_info_path.exists() {
-        return Err("mod.json does not exist.".into());
+        return Err(anyhow!("mod.json does not exist."));
     }
     let mut mod_info_file = File::open(mod_info_path)?;
     let mut mod_info_buffer = String::new();
@@ -45,7 +54,7 @@ pub fn validate(path: &PathBuf) -> Result<ModInfo, Box<dyn std::error::Error>> {
     let name = mod_info.get("name").unwrap().as_str().unwrap();
     println!("{}", name);
     if name.trim().is_empty() {
-        return Err("mod name is empty.".into());
+        return Err(anyhow!("mod name is empty."));
     }
 
     final_mod_info.name = name.to_string();
@@ -68,8 +77,8 @@ pub fn validate(path: &PathBuf) -> Result<ModInfo, Box<dyn std::error::Error>> {
         mod_description_file.read_to_string(&mut mod_description)?;
 
         if mod_description.trim().is_empty() {
-            return Err("mod description is empty.".into());
-        }
+            return Err(anyhow!("mod description is empty."));
+       }
 
         final_mod_info.description = mod_description.trim().to_string();
 
@@ -91,25 +100,27 @@ pub fn validate(path: &PathBuf) -> Result<ModInfo, Box<dyn std::error::Error>> {
         .unwrap()
         .to_uppercase();
 
+    println!("{}", platform);
+
     final_mod_info.game = game.to_string();
     final_mod_info.platform = platform.to_string();
 
     println!("{}", game);
 
-    if !ALLOWED_GAMES.contains(&game.to_uppercase().as_str()) {
-        return Err("could not recognize defined game.".into());
+    if !ALLOWED_GAMES.contains(&game.as_str()) {
+        return Err(anyhow!("could not recognize defined game."));
     }
 
-    if !ALLOWED_PLATFORMS.contains(&platform.to_uppercase().as_str()) {
-        return Err("could not recognize defined platform.".into());
+    if !ALLOWED_PLATFORMS.contains(&platform.as_str()) {
+        return Err(anyhow!("could not recognize defined platform."));
     }
 
     if game.to_string() == "EMR" && platform.to_string() == "WII" {
-        return Err("impossible combination (emr/wii)".into());
+        return Err(anyhow!("impossible combination (emr/wii)"));
     }
 
     if game.to_string() == "EM1" && platform.to_string() == "PC" {
-        return Err("impossible combination (em1/pc)".into());
+        return Err(anyhow!("impossible combination (em1/pc)"));
     }
 
     let mut no_custom_textures = false;
@@ -140,26 +151,42 @@ pub fn validate(path: &PathBuf) -> Result<ModInfo, Box<dyn std::error::Error>> {
         }
     };
 
-    if platform == "PC" && !no_custom_textures {
-        return Err("custom textures not allowed on pc.".into());
+    if strict {
+        if platform == "PC" && !no_custom_textures {
+            return Err(anyhow!("custom textures not allowed on pc."));
+        }
     }
 
-    if platform != "PC" || game != "EMR" {
-        return Err("custom scripts only available with EMR".into());
+    if (platform != "PC" || game != "EMR") && !no_scripts {
+        return Err(anyhow!("custom scripts only available with EMR"));
     }
     final_mod_info.scripts_path = scripts_path.clone();
     final_mod_info.custom_textures_path = custom_textures_path.clone();
     final_mod_info.custom_game_files_path = custom_game_files_path.clone();
 
     if !no_custom_files {
-        if custom_game_files_path.trim().is_empty() {
-            return Err("custom game files path is empty.".into());
-        }
         if PathBuf::from(&custom_game_files_path).is_absolute() {
-            return Err("you are not allowed to have absolute paths on custom file path.".into());
+            return Err(anyhow!("you are not allowed to have absolute paths on custom file path."));
         }
-        if !PathBuf::from(&path).join(&custom_game_files_path).exists() {
-            return Err("custom game files path does not exist.".into());
+
+        if strict {
+            if !PathBuf::from(&path).join(&custom_game_files_path).exists() {
+                return Err(anyhow!("custom game files path does not exist."));
+            }
+            if custom_game_files_path.trim().is_empty() {
+                return Err(anyhow!("custom game files path is empty."));
+            }
+        }
+
+        let pak_path = PathBuf::from(&path).join(custom_game_files_path).join("Paks");
+
+        if platform == "PC" && game == "EMR" && pak_path.exists() {
+            for pak in BANNED_PAK_FILES {
+                let path = pak_path.clone().join(pak);
+                if path.exists() {
+                    return Err(anyhow!(format!("you are not allowed to modify any existing/forbidden PAK files. (global.utoc,global.ucas,recolored-WindowsNoEditor.pak,recolored-WindowsNoEditor.ucas,recolored-WindowsNoEditor.utoc) (VIOLATINGFILE={})", path.display())));
+                }
+            }
         }
 
         final_mod_info
@@ -168,16 +195,19 @@ pub fn validate(path: &PathBuf) -> Result<ModInfo, Box<dyn std::error::Error>> {
     }
 
     if !no_custom_textures {
-        if custom_textures_path.trim().is_empty() {
-            return Err("custom textures path is empty.".into());
-        }
         if PathBuf::from(&custom_textures_path).is_absolute() {
             return Err(
-                "you are not allowed to have absolute paths on custom textures path.".into(),
+                anyhow!("you are not allowed to have absolute paths on custom textures path."),
             );
         }
-        if !PathBuf::from(&path).join(&custom_textures_path).exists() {
-            return Err("custom textures path does not exist.".into());
+
+        if strict {
+            if custom_textures_path.trim().is_empty() {
+                return Err(anyhow!("custom textures path is empty."));
+            }
+            if !PathBuf::from(&path).join(&custom_textures_path).exists() {
+                return Err(anyhow!("custom textures path does not exist."));
+            }
         }
 
         final_mod_info
@@ -187,13 +217,13 @@ pub fn validate(path: &PathBuf) -> Result<ModInfo, Box<dyn std::error::Error>> {
 
     if !no_scripts {
         if scripts_path.trim().is_empty() {
-            return Err("scripts path is empty.".into());
+            return Err(anyhow!("scripts path is empty."));
         }
         if PathBuf::from(&scripts_path).is_absolute() {
-            return Err("you are not allowed to have absolute paths on custom script path.".into());
+            return Err(anyhow!("you are not allowed to have absolute paths on custom script path."));
         }
         if !PathBuf::from(&path).join(&scripts_path).exists() {
-            return Err("custom script path does not exist.".into());
+            return Err(anyhow!("custom script path does not exist."));
         }
 
         final_mod_info
@@ -205,15 +235,15 @@ pub fn validate(path: &PathBuf) -> Result<ModInfo, Box<dyn std::error::Error>> {
     final_mod_info.icon_path = icon_path.trim().to_string();
 
     if icon_path.trim().is_empty() {
-        return Err("mod icon path is empty.".into());
+        return Err(anyhow!("mod icon path is empty."));
     }
 
     if PathBuf::from(&icon_path).is_absolute() {
-        return Err("you are not allowed to have absolute paths on mod icon.".into());
+        return Err(anyhow!("you are not allowed to have absolute paths on mod icon."));
     }
 
     if PathBuf::from(&icon_path).exists() {
-        return Err("mod icon does not exist.".into());
+        return Err(anyhow!("mod icon does not exist."));
     }
 
     match mod_info.get("dependencies") {
@@ -223,7 +253,7 @@ pub fn validate(path: &PathBuf) -> Result<ModInfo, Box<dyn std::error::Error>> {
                 let dependency = element.as_str().unwrap().to_string();
                 for char in dependency.trim().chars() {
                     if !char.is_alphanumeric() {
-                        return Err("only alphanumerics are allowed in dependency list.".into());
+                        return Err(anyhow!("only alphanumerics are allowed in dependency list."));
                     }
                 }
 
@@ -239,15 +269,12 @@ pub fn validate(path: &PathBuf) -> Result<ModInfo, Box<dyn std::error::Error>> {
             continue;
         }
 
-        let extension = match res.path().extension() {
-            Some(s) => s,
-            None => OsStr::new(""),
-        };
+        let extension = res.path().extension().unwrap_or_else(|| OsStr::new(""));
 
         if !extension.is_empty() {
             let formatted_extension = extension.to_str().unwrap().to_string().to_lowercase();
             if BANNED_EXTENSIONS.contains(&formatted_extension.as_str()) {
-                return Err(format!("mod contains illegal file ({})", formatted_extension).into());
+                return Err(anyhow!(format!("mod contains illegal file ({})", formatted_extension)));
             }
         }
     }
@@ -255,7 +282,7 @@ pub fn validate(path: &PathBuf) -> Result<ModInfo, Box<dyn std::error::Error>> {
     Ok(final_mod_info)
 }
 
-pub fn generate_project(_game: String, _platform: String, path: String) -> std::io::Result<()> {
+pub fn generate_project(_game: String, _platform: String, path: String) -> Result<()> {
     println!("Generating Mod");
     let full_path = PathBuf::from(path);
 
@@ -265,15 +292,13 @@ pub fn generate_project(_game: String, _platform: String, path: String) -> std::
     let platform = _platform.to_uppercase();
 
     if game == "EM1" && platform == "PC" {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
+        return Err(anyhow!(
             "impossible combination (EM1/PC)",
         ));
     }
 
     if game == "EMR" && platform == "WII" {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
+        return Err(anyhow!(
             "impossible combination (EMR/WII)",
         ));
     }
