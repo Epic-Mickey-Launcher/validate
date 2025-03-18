@@ -1,12 +1,7 @@
 use serde::{Deserialize, Serialize};
 use anyhow::{anyhow, Result};
 use anyhow::Error;
-use std::{
-    ffi::OsStr,
-    fs::File,
-    io::{Read, Write},
-    path::{Path, PathBuf},
-};
+use std::{ffi::OsStr, fs, fs::File, io::{Read, Write}, path::{Path, PathBuf}};
 
 const ALLOWED_GAMES: [&str; 3] = ["EM1", "EM2", "EMR"];
 const ALLOWED_PLATFORMS: [&str; 2] = ["WII", "PC"];
@@ -168,11 +163,21 @@ pub fn validate(path: &PathBuf, strict: bool) -> Result<ModInfo, Error> {
         if platform == "PC" && !no_custom_textures {
             return Err(anyhow!("custom textures not allowed on pc."));
         }
+
+        if (platform != "PC" || game != "EMR") && !no_scripts {
+            return Err(anyhow!("custom scripts only available with EMR"));
+        }
+    }
+    else {
+        if platform == "PC" && !no_custom_textures {
+            no_custom_textures = true
+        }
+
+        if (platform != "PC" || game != "EMR") && !no_scripts {
+            no_scripts = true;
+        }
     }
 
-    if (platform != "PC" || game != "EMR") && !no_scripts {
-        return Err(anyhow!("custom scripts only available with EMR"));
-    }
     final_mod_info.scripts_path = scripts_path.clone();
     final_mod_info.custom_textures_path = custom_textures_path.clone();
     final_mod_info.custom_game_files_path = custom_game_files_path.clone();
@@ -295,10 +300,11 @@ pub fn validate(path: &PathBuf, strict: bool) -> Result<ModInfo, Error> {
     Ok(final_mod_info)
 }
 
-pub fn generate_project(_game: String, _platform: String, path: String) -> Result<()> {
+pub fn generate_project(_game: String, _platform: String, name: String, description: String, path: String) -> Result<()> {
     println!("Generating Mod");
     let full_path = PathBuf::from(path);
 
+    let mut mod_info: serde_json::Map<String, serde_json::Value> = serde_json::Map::new();
     let mut meta_file = File::create(Path::new(&full_path).join("mod.json"))?;
 
     let game = _game.to_uppercase();
@@ -316,42 +322,27 @@ pub fn generate_project(_game: String, _platform: String, path: String) -> Resul
         ));
     }
 
-    let mut mod_info = ModInfo {
-        name: "Auto Generated Mod".to_string(),
-        game: game.to_string(),
-        platform: platform.to_string(),
-        description: "".to_string(),
-        short_description: "Generated with eml-validate".to_string(),
-        dependencies: Vec::new(),
-        custom_textures_path: "textures".to_string(),
-        custom_game_files_path: "files".to_string(),
-        scripts_path: "".to_string(),
-        icon_path: "icon.png".to_string(),
-        auto_generated_tags: Vec::new(),
-    };
+    mod_info.insert("name".to_string(), serde_json::Value::String(name.clone()));
+    mod_info.insert("short_description".to_string(), serde_json::Value::String("Generated with EML-Validate".to_string()));
+    mod_info.insert("game".to_string(), serde_json::Value::String(game.clone()));
+    mod_info.insert("platform".to_string(), serde_json::Value::String(platform.clone()));
+    mod_info.insert("custom_game_files".to_string(),  serde_json::Value::String("files".to_string()));
+    mod_info.insert("icon_path".to_string(),  serde_json::Value::String("icon.png".to_string()));
 
-    if platform == "PC" {
-        mod_info.custom_textures_path = "".to_string();
+    fs::create_dir_all(Path::new(&full_path).join("files"))?;
+    File::create(&full_path.clone().join("description.md"))?.write_all(description.as_bytes())?;
+
+    if platform == "WII" {
+        mod_info.insert("custom_textures_path".to_string(), serde_json::Value::String("textures".to_string()));
+        fs::create_dir_all(Path::new(&full_path).join("textures"))?;
     }
 
     if game == "EMR" {
-        mod_info.scripts_path = "scripts".to_string();
+        mod_info.insert("scripts_path".to_string(), serde_json::Value::String("scripts".to_string()));
+        fs::create_dir_all(Path::new(&full_path).join("scripts"))?;
     }
 
-    if !mod_info.scripts_path.is_empty() {
-        std::fs::create_dir_all(Path::new(&full_path).join(mod_info.scripts_path.clone()))?;
-    }
-    if !mod_info.custom_game_files_path.is_empty() {
-        std::fs::create_dir_all(
-            Path::new(&full_path).join(mod_info.custom_game_files_path.clone()),
-        )?;
-    }
-    if !mod_info.custom_textures_path.is_empty() {
-        std::fs::create_dir_all(Path::new(&full_path).join(mod_info.custom_textures_path.clone()))?;
-    }
-
-    let stringified = serde_json::to_string(&mod_info)?;
-    meta_file.write_all(stringified.as_bytes())?;
+    meta_file.write_all(serde_json::to_string(&mod_info)?.as_bytes())?;
     println!("Finished generating mod");
     Ok(())
 }
