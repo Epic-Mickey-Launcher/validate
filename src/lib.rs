@@ -1,14 +1,22 @@
-use serde::{Deserialize, Serialize};
-use anyhow::{anyhow, Result};
 use anyhow::Error;
-use std::{ffi::OsStr, fs, fs::File, io::{Read, Write}, path::{Path, PathBuf}};
+use anyhow::{anyhow, Result};
+use serde::{Deserialize, Serialize};
+use std::{
+    ffi::OsStr,
+    fs,
+    fs::File,
+    io::{Read, Write},
+    path::{Path, PathBuf},
+};
 
 const ALLOWED_GAMES: [&str; 3] = ["EM1", "EM2", "EMR"];
 const ALLOWED_PLATFORMS: [&str; 2] = ["WII", "PC"];
 const BANNED_EXTENSIONS: [&str; 6] = ["dll", "so", "exe", "sh", "bat", "scr"]; // not technically
                                                                                // banned, but will
                                                                                // require analysis
-                                                                               // by a moderator
+                                                                               // by a moderator.
+                                                                               // this does not prevent file instruction injections to already trusted file formats, but it at
+                                                                               // least removes the most prevalent malware attack vectors.
 const BANNED_PAK_FILES: [&str; 5] = [
     "global.utoc",
     "global.ucas",
@@ -73,7 +81,7 @@ pub fn validate(path: &PathBuf, strict: bool) -> Result<ModInfo, Error> {
 
         if mod_description.trim().is_empty() {
             return Err(anyhow!("mod description is empty."));
-       }
+        }
 
         final_mod_info.description = mod_description.trim().to_string();
 
@@ -84,22 +92,17 @@ pub fn validate(path: &PathBuf, strict: bool) -> Result<ModInfo, Error> {
 
     let mut game = match mod_info.get("game") {
         Some(x) => x.as_str().unwrap().to_string().to_uppercase(),
-        None => {
-            "".to_string()
-        }
+        None => "".to_string(),
     };
     let mut platform = match mod_info.get("platform") {
         Some(x) => x.as_str().unwrap().to_string().to_uppercase(),
-        None => {
-            "".to_string()
-        }
+        None => "".to_string(),
     };
 
     if platform.trim().is_empty() {
         if strict {
             return Err(anyhow!("mod platform is empty."));
-        }
-        else {
+        } else {
             platform = "WII".to_string();
         }
     }
@@ -167,8 +170,7 @@ pub fn validate(path: &PathBuf, strict: bool) -> Result<ModInfo, Error> {
         if (platform != "PC" || game != "EMR") && !no_scripts {
             return Err(anyhow!("custom scripts only available with EMR"));
         }
-    }
-    else {
+    } else {
         if platform == "PC" && !no_custom_textures {
             no_custom_textures = true
         }
@@ -184,7 +186,9 @@ pub fn validate(path: &PathBuf, strict: bool) -> Result<ModInfo, Error> {
 
     if !no_custom_files {
         if PathBuf::from(&custom_game_files_path).is_absolute() {
-            return Err(anyhow!("you are not allowed to have absolute paths on custom file path."));
+            return Err(anyhow!(
+                "you are not allowed to have absolute paths on custom file path."
+            ));
         }
 
         if strict {
@@ -196,7 +200,9 @@ pub fn validate(path: &PathBuf, strict: bool) -> Result<ModInfo, Error> {
             }
         }
 
-        let pak_path = PathBuf::from(&path).join(custom_game_files_path).join("Paks");
+        let pak_path = PathBuf::from(&path)
+            .join(custom_game_files_path)
+            .join("Paks");
 
         if platform == "PC" && game == "EMR" && pak_path.exists() {
             for pak in BANNED_PAK_FILES {
@@ -214,9 +220,9 @@ pub fn validate(path: &PathBuf, strict: bool) -> Result<ModInfo, Error> {
 
     if !no_custom_textures {
         if PathBuf::from(&custom_textures_path).is_absolute() {
-            return Err(
-                anyhow!("you are not allowed to have absolute paths on custom textures path."),
-            );
+            return Err(anyhow!(
+                "you are not allowed to have absolute paths on custom textures path."
+            ));
         }
 
         if strict {
@@ -238,7 +244,9 @@ pub fn validate(path: &PathBuf, strict: bool) -> Result<ModInfo, Error> {
             return Err(anyhow!("scripts path is empty."));
         }
         if PathBuf::from(&scripts_path).is_absolute() {
-            return Err(anyhow!("you are not allowed to have absolute paths on custom script path."));
+            return Err(anyhow!(
+                "you are not allowed to have absolute paths on custom script path."
+            ));
         }
         if !PathBuf::from(&path).join(&scripts_path).exists() {
             return Err(anyhow!("custom script path does not exist."));
@@ -257,7 +265,9 @@ pub fn validate(path: &PathBuf, strict: bool) -> Result<ModInfo, Error> {
     }
 
     if PathBuf::from(&icon_path).is_absolute() {
-        return Err(anyhow!("you are not allowed to have absolute paths on mod icon."));
+        return Err(anyhow!(
+            "you are not allowed to have absolute paths on mod icon."
+        ));
     }
 
     if PathBuf::from(&icon_path).exists() {
@@ -271,7 +281,9 @@ pub fn validate(path: &PathBuf, strict: bool) -> Result<ModInfo, Error> {
                 let dependency = element.as_str().unwrap().to_string();
                 for char in dependency.trim().chars() {
                     if !char.is_alphanumeric() {
-                        return Err(anyhow!("only alphanumerics are allowed in dependency list."));
+                        return Err(anyhow!(
+                            "only alphanumerics are allowed in dependency list."
+                        ));
                     }
                 }
 
@@ -292,7 +304,10 @@ pub fn validate(path: &PathBuf, strict: bool) -> Result<ModInfo, Error> {
         if !extension.is_empty() {
             let formatted_extension = extension.to_str().unwrap().to_string().to_lowercase();
             if BANNED_EXTENSIONS.contains(&formatted_extension.as_str()) {
-                return Err(anyhow!(format!("mod contains illegal file ({})", formatted_extension)));
+                return Err(anyhow!(format!(
+                    "mod contains illegal file ({})",
+                    formatted_extension
+                )));
             }
         }
     }
@@ -300,7 +315,14 @@ pub fn validate(path: &PathBuf, strict: bool) -> Result<ModInfo, Error> {
     Ok(final_mod_info)
 }
 
-pub fn generate_project(_game: String, _platform: String, name: String, description: String, path: String) -> Result<()> {
+pub fn generate_project(
+    _game: String,
+    _platform: String,
+    name: String,
+    description: String,
+    short_description: String,
+    path: String,
+) -> Result<()> {
     println!("Generating Mod");
     let full_path = PathBuf::from(path);
 
@@ -311,34 +333,55 @@ pub fn generate_project(_game: String, _platform: String, name: String, descript
     let platform = _platform.to_uppercase();
 
     if game == "EM1" && platform == "PC" {
-        return Err(anyhow!(
-            "impossible combination (EM1/PC)",
-        ));
+        return Err(anyhow!("impossible combination (EM1/PC)",));
     }
 
     if game == "EMR" && platform == "WII" {
-        return Err(anyhow!(
-            "impossible combination (EMR/WII)",
-        ));
+        return Err(anyhow!("impossible combination (EMR/WII)",));
+    }
+
+    if short_description.trim() == "" {
+        return Err(anyhow!("short description must have content",));
+    }
+    if description.trim() == "" {
+        return Err(anyhow!("description must have content",));
     }
 
     mod_info.insert("name".to_string(), serde_json::Value::String(name.clone()));
-    mod_info.insert("short_description".to_string(), serde_json::Value::String("Generated with EML-Validate".to_string()));
+    mod_info.insert(
+        "short_description".to_string(),
+        serde_json::Value::String(short_description),
+    );
     mod_info.insert("game".to_string(), serde_json::Value::String(game.clone()));
-    mod_info.insert("platform".to_string(), serde_json::Value::String(platform.clone()));
-    mod_info.insert("custom_game_files".to_string(),  serde_json::Value::String("files".to_string()));
-    mod_info.insert("icon_path".to_string(),  serde_json::Value::String("icon.png".to_string()));
+    mod_info.insert(
+        "platform".to_string(),
+        serde_json::Value::String(platform.clone()),
+    );
+    mod_info.insert(
+        "custom_game_files".to_string(),
+        serde_json::Value::String("files".to_string()),
+    );
+    mod_info.insert(
+        "icon_path".to_string(),
+        serde_json::Value::String("icon.png".to_string()),
+    );
 
     fs::create_dir_all(Path::new(&full_path).join("files"))?;
     File::create(&full_path.clone().join("description.md"))?.write_all(description.as_bytes())?;
 
     if platform == "WII" {
-        mod_info.insert("custom_textures_path".to_string(), serde_json::Value::String("textures".to_string()));
+        mod_info.insert(
+            "custom_textures_path".to_string(),
+            serde_json::Value::String("textures".to_string()),
+        );
         fs::create_dir_all(Path::new(&full_path).join("textures"))?;
     }
 
     if game == "EMR" {
-        mod_info.insert("scripts_path".to_string(), serde_json::Value::String("scripts".to_string()));
+        mod_info.insert(
+            "scripts_path".to_string(),
+            serde_json::Value::String("scripts".to_string()),
+        );
         fs::create_dir_all(Path::new(&full_path).join("scripts"))?;
     }
 
