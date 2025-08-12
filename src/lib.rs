@@ -62,7 +62,7 @@ pub fn validate(path: &PathBuf, strict: bool) -> Result<ModInfo, Error> {
 
     final_mod_info.name = name.to_string();
 
-    let short_description_value = mod_info.get("shortdescription");
+    let short_description_value = mod_info.get("short_description");
     let mut no_short_description = false;
 
     match short_description_value {
